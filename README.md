@@ -152,7 +152,3 @@ For non-technical users, a step-by-step PDF setup guide is included:
 🔗 github.com/RohillaJai-030502
 
 ---
-
-## 📜 License
-
-This project is private and intended for internal use at TBRL — HRD Division.
