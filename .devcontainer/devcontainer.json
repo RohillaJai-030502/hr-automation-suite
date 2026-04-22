@@ -1,0 +1,25 @@
+{
+    "name": "HR Automation Suite",
+    "image": "mcr.microsoft.com/devcontainers/python:3.12",
+    "features": {
+        "ghcr.io/devcontainers/features/postgres:1": {
+            "version": "15"
+        }
+    },
+    "postCreateCommand": "bash .devcontainer/setup.sh",
+    "forwardPorts": [5001, 5432],
+    "portsAttributes": {
+        "5001": {
+            "label": "Flask App",
+            "onAutoForward": "openBrowser"
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-azuretools.vscode-docker"
+            ]
+        }
+    }
+}
