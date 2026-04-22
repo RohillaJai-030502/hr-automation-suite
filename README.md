@@ -1,5 +1,5 @@
 # 🏢 HR Automation Suite
-### Terminal Ballistics Research Laboratory (TBRL) — HRD Division
+### High-Security HR Department — HRD Division
 
 A secure, LAN-based Python + Flask web application to automate HR operations for the Unpaid Internship lifecycle. Built to replace manual Excel tracking with a clean, modern web interface.
 
@@ -29,7 +29,7 @@ A secure, LAN-based Python + Flask web application to automate HR operations for
 |---|---|
 | Language | Python 3.12.5 |
 | Web Framework | Flask |
-| Database | PostgreSQL 15 |
+| Database | PostgreSQL 17 |
 | Document Generation | python-docx |
 | PDF Generation | ReportLab |
 | Frontend | HTML + CSS (Vanilla) |
@@ -54,7 +54,7 @@ hr-automation-suite/
 ├── config.py                   ← DB & app configuration
 ├── data.json                   ← Departments data
 ├── requirements.txt            ← Python dependencies
-└── HR_Automation_Setup_Guide.pdf ← Company PC setup guide
+└── HR_Automation_Setup_Guide.pdf ← Organisation PC setup guide
 ```
 
 ---
@@ -63,7 +63,7 @@ hr-automation-suite/
 
 ### Prerequisites
 - Python 3.12.5
-- PostgreSQL 15
+- PostgreSQL 17
 - Git
 
 ### Step 1 — Clone the repo
@@ -152,3 +152,7 @@ For non-technical users, a step-by-step PDF setup guide is included:
 🔗 github.com/RohillaJai-030502
 
 ---
+
+## 📜 License
+
+This project is private and intended for internal use within the Organisation — HRD Division.
