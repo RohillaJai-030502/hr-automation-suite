@@ -1,15 +1,19 @@
 # ============================================================
-# app.py — Main Flask Application
+# app.py — Main Flask Application (Version 2)
 # ============================================================
 
-from flask import Flask, render_template, request, send_file, redirect, url_for, jsonify
+from flask import Flask, render_template, request, send_file, redirect, url_for, session
 from logic.notice_generator import generate_notice_docx
 import os
 import json
+from datetime import datetime
 
 app = Flask(__name__)
+app.secret_key = "hr_automation_secret_key_2024"
 
-DATA_FILE = "data.json"
+DATA_FILE     = "data.json"
+HISTORY_FILE  = "history.json"
+DEFAULTS_FILE = "defaults.json"
 
 DEGREE_OPTIONS = [
     "B.Tech/B.E.", "M.Tech", "B.Sc", "M.Sc", "PhD"
@@ -20,31 +24,63 @@ MONTHS = [
     "July", "August", "September", "October", "November", "December"
 ]
 
-# ── Helper: Load departments from JSON ──
-def load_departments():
-    with open(DATA_FILE, "r") as f:
-        return json.load(f)["departments"]
+# ── Helpers ──
+def load_json(filepath, default):
+    if os.path.exists(filepath):
+        with open(filepath, "r") as f:
+            return json.load(f)
+    return default
 
-# ── Helper: Save departments to JSON ──
+def save_json(filepath, data):
+    with open(filepath, "w") as f:
+        json.dump(data, f, indent=4)
+
+def load_departments():
+    return load_json(DATA_FILE, {"departments": []})["departments"]
+
 def save_departments(departments):
-    with open(DATA_FILE, "w") as f:
-        json.dump({"departments": departments}, f, indent=4)
+    save_json(DATA_FILE, {"departments": departments})
+
+def load_history():
+    return load_json(HISTORY_FILE, {"history": []})["history"]
+
+def save_history(entry):
+    history = load_history()
+    history.insert(0, entry)
+    history = history[:20]  # Keep last 20 only
+    save_json(HISTORY_FILE, {"history": history})
+
+def load_defaults():
+    return load_json(DEFAULTS_FILE, {})
+
+def save_defaults(defaults):
+    save_json(DEFAULTS_FILE, defaults)
 
 # ── Main Form ──
 @app.route("/", methods=["GET"])
 def index():
+    saved = session.pop("form_data", {})
+    defaults = load_defaults()
     return render_template(
         "notice_form.html",
         departments=load_departments(),
         degree_options=DEGREE_OPTIONS,
         months=MONTHS,
-        saved={}
+        saved=saved,
+        defaults=defaults,
+        history=load_history()
     )
 
-# ── Edit (back from preview with data preserved) ──
-@app.route("/edit", methods=["POST"])
-def edit():
-    saved = {
+# ── Save Defaults ──
+@app.route("/save-defaults", methods=["POST"])
+def save_defaults_route():
+    defaults = {
+        "signatory_name":        request.form.get("signatory_name", ""),
+        "signatory_designation": request.form.get("signatory_designation", ""),
+        "ion_prefix":            request.form.get("ion_prefix", ""),
+    }
+    save_defaults(defaults)
+    session["form_data"] = {
         "degree":                request.form.get("degree"),
         "start_month":           request.form.get("start_month"),
         "start_year":            request.form.get("start_year"),
@@ -57,15 +93,53 @@ def edit():
         "signatory_designation": request.form.get("signatory_designation"),
         "departments":           request.form.getlist("departments"),
     }
-    return render_template(
-        "notice_form.html",
-        departments=load_departments(),
-        degree_options=DEGREE_OPTIONS,
-        months=MONTHS,
-        saved=saved
-    )
+    return redirect(url_for("index"))
 
-# ── Generate Notice (direct download) ──
+# ── Preview ──
+@app.route("/preview", methods=["POST"])
+def preview():
+    departments = request.form.getlist("departments")
+    num_cols = 5
+    num_rows = -(-len(departments) // num_cols)
+    padded_depts = departments + [""] * (num_rows * num_cols - len(departments))
+    dept_rows = [padded_depts[r * num_cols:(r + 1) * num_cols] for r in range(num_rows)]
+
+    data = {
+        "degree":                request.form.get("degree"),
+        "start_month":           request.form.get("start_month"),
+        "start_year":            request.form.get("start_year"),
+        "end_month":             request.form.get("end_month"),
+        "end_year":              request.form.get("end_year"),
+        "last_date":             request.form.get("last_date"),
+        "ion_number":            request.form.get("ion_number"),
+        "notice_date":           request.form.get("notice_date"),
+        "signatory_name":        request.form.get("signatory_name"),
+        "signatory_designation": request.form.get("signatory_designation"),
+        "departments":           departments,
+        "dept_rows":             dept_rows,
+    }
+    session["form_data"] = data
+    return render_template("notice_preview.html", data=data)
+
+# ── Edit (back from preview) ──
+@app.route("/edit", methods=["POST"])
+def edit():
+    session["form_data"] = {
+        "degree":                request.form.get("degree"),
+        "start_month":           request.form.get("start_month"),
+        "start_year":            request.form.get("start_year"),
+        "end_month":             request.form.get("end_month"),
+        "end_year":              request.form.get("end_year"),
+        "last_date":             request.form.get("last_date"),
+        "ion_number":            request.form.get("ion_number"),
+        "notice_date":           request.form.get("notice_date"),
+        "signatory_name":        request.form.get("signatory_name"),
+        "signatory_designation": request.form.get("signatory_designation"),
+        "departments":           request.form.getlist("departments"),
+    }
+    return redirect(url_for("index"))
+
+# ── Generate (direct download) ──
 @app.route("/generate", methods=["POST"])
 def generate():
     data = {
@@ -82,37 +156,15 @@ def generate():
         "departments":           request.form.getlist("departments"),
     }
     filepath = generate_notice_docx(data)
+    save_history({
+        "filename": os.path.basename(filepath),
+        "degree": data["degree"],
+        "period": f"{data['start_month']} {data['start_year']} - {data['end_month']} {data['end_year']}",
+        "generated_at": datetime.now().strftime("%d %b %Y, %I:%M %p"),
+        "filepath": filepath,
+        "departments_count": len(data["departments"])
+    })
     return send_file(filepath, as_attachment=True)
-
-# ── Preview Notice ──
-@app.route("/preview", methods=["POST"])
-def preview():
-    departments = request.form.getlist("departments")
-    num_cols = 5
-    num_rows = -(-len(departments) // num_cols)
-
-    padded_depts = departments + [""] * (num_rows * num_cols - len(departments))
-
-    dept_rows = []
-    for r in range(num_rows):
-        row = padded_depts[r * num_cols:(r + 1) * num_cols]
-        dept_rows.append(row)
-
-    data = {
-        "degree":                request.form.get("degree"),
-        "start_month":           request.form.get("start_month"),
-        "start_year":            request.form.get("start_year"),
-        "end_month":             request.form.get("end_month"),
-        "end_year":              request.form.get("end_year"),
-        "last_date":             request.form.get("last_date"),
-        "ion_number":            request.form.get("ion_number"),
-        "notice_date":           request.form.get("notice_date"),
-        "signatory_name":        request.form.get("signatory_name"),
-        "signatory_designation": request.form.get("signatory_designation"),
-        "departments":           departments,
-        "dept_rows":             dept_rows,
-    }
-    return render_template("notice_preview.html", data=data)
 
 # ── Download after Preview ──
 @app.route("/download", methods=["POST"])
@@ -131,7 +183,29 @@ def download():
         "departments":           request.form.getlist("departments"),
     }
     filepath = generate_notice_docx(data)
+    save_history({
+        "filename": os.path.basename(filepath),
+        "degree": data["degree"],
+        "period": f"{data['start_month']} {data['start_year']} - {data['end_month']} {data['end_year']}",
+        "generated_at": datetime.now().strftime("%d %b %Y, %I:%M %p"),
+        "filepath": filepath,
+        "departments_count": len(data["departments"])
+    })
     return send_file(filepath, as_attachment=True)
+
+# ── Download from History ──
+@app.route("/history/download/<filename>", methods=["GET"])
+def download_history(filename):
+    filepath = os.path.join("generated_notices", filename)
+    if os.path.exists(filepath):
+        return send_file(filepath, as_attachment=True)
+    return "File not found", 404
+
+# ── Clear History ──
+@app.route("/history/clear", methods=["POST"])
+def clear_history():
+    save_json(HISTORY_FILE, {"history": []})
+    return redirect(url_for("index"))
 
 # ── Add Department ──
 @app.route("/departments/add", methods=["POST"])
