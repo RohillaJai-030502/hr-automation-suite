@@ -2,8 +2,9 @@
 # app.py — Main Flask Application (Version 2)
 # ============================================================
 
-from flask import Flask, render_template, request, send_file, redirect, url_for, session
+from flask import Flask, render_template, request, send_file, redirect, url_for, session, jsonify
 from logic.notice_generator import generate_notice_docx
+from logic.form_generator import generate_form_docx
 import os
 import json
 from datetime import datetime
@@ -47,7 +48,7 @@ def load_history():
 def save_history(entry):
     history = load_history()
     history.insert(0, entry)
-    history = history[:20]  # Keep last 20 only
+    history = history[:20]
     save_json(HISTORY_FILE, {"history": history})
 
 def load_defaults():
@@ -56,9 +57,14 @@ def load_defaults():
 def save_defaults(defaults):
     save_json(DEFAULTS_FILE, defaults)
 
-# ── Main Form ──
+# ── Dashboard (Home) ──
 @app.route("/", methods=["GET"])
 def index():
+    return render_template("dashboard.html")
+
+# ── ION Notice Form ──
+@app.route("/ion-notice", methods=["GET"])
+def ion_notice():
     saved = session.pop("form_data", {})
     defaults = load_defaults()
     return render_template(
@@ -93,7 +99,7 @@ def save_defaults_route():
         "signatory_designation": request.form.get("signatory_designation"),
         "departments":           request.form.getlist("departments"),
     }
-    return redirect(url_for("index"))
+    return redirect(url_for("ion_notice"))
 
 # ── Preview ──
 @app.route("/preview", methods=["POST"])
@@ -137,7 +143,7 @@ def edit():
         "signatory_designation": request.form.get("signatory_designation"),
         "departments":           request.form.getlist("departments"),
     }
-    return redirect(url_for("index"))
+    return redirect(url_for("ion_notice"))
 
 # ── Generate (direct download) ──
 @app.route("/generate", methods=["POST"])
@@ -205,7 +211,7 @@ def download_history(filename):
 @app.route("/history/clear", methods=["POST"])
 def clear_history():
     save_json(HISTORY_FILE, {"history": []})
-    return redirect(url_for("index"))
+    return redirect(url_for("ion_notice"))
 
 # ── Add Department ──
 @app.route("/departments/add", methods=["POST"])
@@ -216,7 +222,7 @@ def add_department():
         if name not in departments:
             departments.append(name)
             save_departments(departments)
-    return redirect(url_for("index"))
+    return redirect(url_for("ion_notice"))
 
 # ── Delete Department ──
 @app.route("/departments/delete/<name>", methods=["POST"])
@@ -224,7 +230,7 @@ def delete_department(name):
     departments = load_departments()
     departments = [d for d in departments if d != name]
     save_departments(departments)
-    return redirect(url_for("index"))
+    return redirect(url_for("ion_notice"))
 
 # ── Edit Department ──
 @app.route("/departments/edit", methods=["POST"])
@@ -235,7 +241,18 @@ def edit_department():
         departments = load_departments()
         departments = [new_name if d == old_name else d for d in departments]
         save_departments(departments)
-    return redirect(url_for("index"))
+    return redirect(url_for("ion_notice"))
+
+# ── Generate FM/HRD-09 Form ──
+@app.route("/form/hrd09", methods=["GET"])
+def generate_hrd09():
+    filepath = generate_form_docx()
+    return send_file(filepath, as_attachment=True)
+
+# ── API: History for Dashboard ──
+@app.route("/api/history", methods=["GET"])
+def api_history():
+    return jsonify({"history": load_history()})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=True)
